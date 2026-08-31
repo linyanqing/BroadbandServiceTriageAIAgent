@@ -33,7 +33,7 @@ config: AgentConfig = load_config()
 setup_telemetry(config)
 graph = build_graph(config)
 
-app = FastAPI(title="TPG Broadband Service Triage AI Agent", version=config.agent_version)
+app = FastAPI(title="Broadband Service Triage AI Agent", version=config.agent_version)
 instrument_fastapi_app(app, config)
 
 

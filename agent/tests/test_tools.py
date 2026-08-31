@@ -60,7 +60,7 @@ def test_get_broadband_service(registry):
     result = spec.handler(spec.input_schema(customer_id="123"))
     assert result == {
         "service_id": "BB-123",
-        "product": "TPG Broadband",
+        "product": "Home Broadband",
         "technology": "FTTP",
         "status": "active",
     }

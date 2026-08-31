@@ -1,7 +1,7 @@
 [project]
 name = "agent"
 version = "0.1.0"
-description = "TPG Broadband Service Triage AI Agent (LangGraph + Bedrock POC)"
+description = "Broadband Service Triage AI Agent (LangGraph + Bedrock POC)"
 authors = [
     { name = "Yanqing Lin", email = "linyanqing@gmail.com" }
 ]

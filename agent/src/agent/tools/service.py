@@ -16,7 +16,7 @@ class GetBroadbandServiceInput(BaseModel):
 def get_broadband_service(payload: GetBroadbandServiceInput) -> dict:
     return {
         "service_id": f"BB-{payload.customer_id}",
-        "product": "TPG Broadband",
+        "product": "Home Broadband",
         "technology": "FTTP",
         "status": "active",
     }

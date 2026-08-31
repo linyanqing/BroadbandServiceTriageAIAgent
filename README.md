@@ -1,7 +1,7 @@
-# TPG Broadband Service Triage AI Agent (POC)
+# Broadband Service Triage AI Agent (POC)
 
 A production-style proof of concept for an enterprise AI agent that triages
-TPG broadband service issues: LangGraph orchestration around a ReAct-style
+broadband service issues: LangGraph orchestration around a ReAct-style
 loop (perception -> reasoning -> tool/action -> observation -> reasoning...),
 Amazon Bedrock as the model provider, five deterministic mocked enterprise
 tools, LangSmith for AI-specific tracing, OpenTelemetry for enterprise

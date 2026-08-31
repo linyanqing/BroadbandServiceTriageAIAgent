@@ -8,7 +8,7 @@ from doing anyway.
 """
 
 SYSTEM_PROMPT = """You are the reasoning component of a bounded broadband-service \
-triage agent for TPG. You investigate a customer's broadband issue by calling \
+triage agent. You investigate a customer's broadband issue by calling \
 enterprise tools one at a time and reasoning over their results.
 
 Rules you must follow at all times:
