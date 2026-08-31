@@ -5,25 +5,25 @@
 ```mermaid
 flowchart LR
     Customer([Customer])
-    API[API Gateway / ALB]
-    Agent[LangGraph Agent Runtime\n(ECS Fargate)]
-    Bedrock[(Amazon Bedrock)]
-    Enterprise[[Enterprise APIs\ncustomer / service / outage /\ndiagnostics / fault-mgmt]]
-    LangSmith[(LangSmith)]
-    ADOT[ADOT Collector]
-    Cribl[[Cribl]]
-    Datadog[(Datadog)]
-    Splunk[(Splunk)]
-    CloudWatch[(CloudWatch)]
+    API["API Gateway / ALB"]
+    Agent["LangGraph Agent Runtime<br/>ECS Fargate"]
+    Bedrock[("Amazon Bedrock")]
+    Enterprise[["Enterprise APIs<br/>customer / service / outage /<br/>diagnostics / fault-mgmt"]]
+    LangSmith[("LangSmith")]
+    ADOT["ADOT Collector"]
+    Cribl[["Cribl"]]
+    Datadog[("Datadog")]
+    Splunk[("Splunk")]
+    CloudWatch[("CloudWatch")]
 
     Customer --> API --> Agent
     Agent --> Bedrock
     Agent --> Enterprise
-    Agent -. AI tracing .-> LangSmith
-    Agent -. enterprise telemetry .-> ADOT --> Cribl
+    Agent -. "AI tracing" .-> LangSmith
+    Agent -. "enterprise telemetry" .-> ADOT --> Cribl
     Cribl --> Datadog
     Cribl --> Splunk
-    Agent -. AWS-native logs/metrics .-> CloudWatch
+    Agent -. "AWS-native logs/metrics" .-> CloudWatch
 ```
 
 Two observability paths leave the agent, and they never merge:
@@ -37,26 +37,26 @@ rationale.
 
 ```mermaid
 flowchart TB
-    subgraph Runtime[LangGraph Agent Runtime]
-        Perception[perception]
-        Decision[agent_decision]
-        ToolExec[tool_execution]
-        Observation[observation]
-        Approval[human_approval]
-        Response[final_response]
+    subgraph Runtime["LangGraph Agent Runtime"]
+        Perception["perception"]
+        Decision["agent_decision"]
+        ToolExec["tool_execution"]
+        Observation["observation"]
+        Approval["human_approval"]
+        Response["final_response"]
     end
 
     Perception --> Decision
-    Decision -->|tool, low-risk / approved| ToolExec
-    Decision -->|tool, high-risk, not approved| Approval
-    Decision -->|complete / escalate| Response
+    Decision -->|"tool, low-risk / approved"| ToolExec
+    Decision -->|"tool, high-risk, not approved"| Approval
+    Decision -->|"complete / escalate"| Response
     ToolExec --> Observation --> Decision
     Approval --> Decision
     Response --> Done([END])
 
-    Decision <--> Bedrock[(Amazon Bedrock\nChatBedrockConverse + tool binding)]
-    ToolExec --> Registry[[Tool Registry\nallow-list + pydantic schemas]]
-    Registry --> Tools[[5 mocked enterprise tools]]
+    Decision <--> Bedrock[("Amazon Bedrock<br/>ChatBedrockConverse + tool binding")]
+    ToolExec --> Registry[["Tool Registry<br/>allow-list + pydantic schemas"]]
+    Registry --> Tools[["5 mocked enterprise tools"]]
 ```
 
 The graph (state machine structure, allowed transitions, the human-approval
@@ -71,12 +71,12 @@ is what actually chooses the next action at runtime from the current
 stateDiagram-v2
     [*] --> perception
     perception --> agent_decision
-    agent_decision --> tool_execution: tool (low-risk / approved)
-    agent_decision --> human_approval: tool (high-risk, not approved)
-    agent_decision --> final_response: complete / escalate / invalid action / max iterations
+    agent_decision --> tool_execution: tool, low-risk or approved
+    agent_decision --> human_approval: tool, high-risk, not approved
+    agent_decision --> final_response: complete, escalate, invalid action, or max iterations
     tool_execution --> observation
     observation --> agent_decision
-    human_approval --> agent_decision: interrupt() / Command(resume=...)
+    human_approval --> agent_decision: interrupt then Command resume
     final_response --> [*]
 ```
 
@@ -84,22 +84,22 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-    Internet((Internet)) --> ALB[Application Load Balancer]
-    ALB --> Service[ECS Fargate Service]
+    Internet((Internet)) --> ALB["Application Load Balancer"]
+    ALB --> Service["ECS Fargate Service"]
 
-    subgraph Task[ECS Task]
-        AppC[agent container\nFastAPI + LangGraph]
-        ADOTC[adot-collector container\nsidecar]
-        AppC -- OTLP localhost:4318 --> ADOTC
+    subgraph Task["ECS Task"]
+        AppC["agent container<br/>FastAPI + LangGraph"]
+        ADOTC["adot-collector container<br/>sidecar"]
+        AppC -- "OTLP localhost:4318" --> ADOTC
     end
 
     Service --> Task
-    AppC --> BedrockSvc[(Amazon Bedrock)]
-    AppC --> SecretsMgr[(Secrets Manager)]
-    AppC -- awslogs driver --> CW[(CloudWatch Logs)]
-    ADOTC -- OTLP/HTTP --> CriblSvc[[Cribl]]
-    CriblSvc --> DD[(Datadog)]
-    CriblSvc --> SP[(Splunk)]
+    AppC --> BedrockSvc[("Amazon Bedrock")]
+    AppC --> SecretsMgr[("Secrets Manager")]
+    AppC -- "awslogs driver" --> CW[("CloudWatch Logs")]
+    ADOTC -- "OTLP/HTTP" --> CriblSvc[["Cribl"]]
+    CriblSvc --> DD[("Datadog")]
+    CriblSvc --> SP[("Splunk")]
 ```
 
 See [deployment.md](deployment.md) for the Terraform that provisions this
@@ -110,16 +110,16 @@ See [deployment.md](deployment.md) for the Terraform that provisions this
 ```mermaid
 sequenceDiagram
     participant C as Customer
-    participant API as FastAPI /api/v1/triage
+    participant API as FastAPI Triage Endpoint
     participant G as LangGraph
     participant B as Bedrock
     participant T as Enterprise Tool
     participant LS as LangSmith
     participant OT as OpenTelemetry
     participant ADOT as ADOT Collector
-    participant CS as Cribl -> Datadog/Splunk
+    participant CS as Cribl
 
-    C->>API: POST /api/v1/triage {customer_id, message}
+    C->>API: POST /api/v1/triage (customer_id, message)
     API->>G: invoke(state, thread_id=request_id)
     G->>G: perception (classify issue)
     loop ReAct loop
@@ -134,19 +134,19 @@ sequenceDiagram
         end
     end
     opt high-risk tool (create_fault_ticket)
-        G-->>API: __interrupt__ (awaiting_approval)
-        API-->>C: 200 {status: awaiting_approval, approval: {...}}
-        C->>API: POST /approve {approved: true}
+        G-->>API: interrupt (awaiting_approval)
+        API-->>C: 200 status=awaiting_approval, approval={...}
+        C->>API: POST /approve (approved=true)
         API->>G: Command(resume={approved: true})
     end
     G-->>API: final state
-    API-->>C: 200 {status, summary, ticket_id}
+    API-->>C: 200 status, summary, ticket_id
     par independent telemetry paths
         G-->>LS: run/node/tool traces, tags, metadata (redacted)
     and
         G-->>OT: spans + metrics (OTLP)
         OT-->>ADOT: export
-        ADOT-->>CS: forward
+        ADOT-->>CS: forward to Datadog and Splunk
     end
 ```
 
