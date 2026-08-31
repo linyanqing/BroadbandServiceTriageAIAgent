@@ -14,7 +14,7 @@ bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
 
 auto_approve_high_risk   = false
 langsmith_tracing_enabled = false
-langsmith_project        = "tpg-broadband-triage"
+langsmith_project        = "broadband-triage-agent"
 
 cribl_otlp_endpoint = "https://cribl.example.internal:10080"
 alarm_sns_topic_arn = ""

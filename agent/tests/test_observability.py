@@ -62,3 +62,31 @@ def test_langsmith_run_config_redacts_pii_and_sets_expected_tags():
     # raw customer message (and any PII within it) is never forwarded to LangSmith metadata
     assert "customer_message" not in run_config["metadata"]
     assert "Jane Doe" not in str(run_config["metadata"])
+
+
+def test_triage_endpoint_actually_passes_langsmith_tags_and_metadata_to_the_graph(monkeypatch):
+    """Guards against build_run_config existing but silently never being
+    wired into the graph.invoke() call sites in main.py."""
+    from agent import main as main_module
+
+    captured: dict = {}
+    original_invoke = main_module.graph.invoke
+
+    def spy_invoke(*args, **kwargs):
+        captured["config"] = kwargs.get("config")
+        return original_invoke(*args, **kwargs)
+
+    monkeypatch.setattr(main_module.graph, "invoke", spy_invoke)
+
+    from fastapi.testclient import TestClient
+
+    client = TestClient(main_module.app)
+    client.post(
+        "/api/v1/triage",
+        json={"customer_id": "789", "message": "My broadband keeps dropping out"},
+    )
+
+    assert captured["config"] is not None
+    assert "application:broadband-triage-agent" in captured["config"]["tags"]
+    assert captured["config"]["metadata"]["customer_id"] == "789"
+    assert captured["config"]["configurable"]["thread_id"]

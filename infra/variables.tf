@@ -79,7 +79,7 @@ variable "langsmith_tracing_enabled" {
 
 variable "langsmith_project" {
   type    = string
-  default = "tpg-broadband-triage"
+  default = "broadband-triage-agent"
 }
 
 variable "cribl_otlp_endpoint" {

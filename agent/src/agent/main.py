@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from .config import AgentConfig, load_config
 from .graph import build_graph
+from .observability.langsmith import build_run_config
 from .observability.logging import configure_logging, get_logger, set_correlation_context
 from .observability.telemetry import (
     get_meter_instruments,
@@ -89,12 +90,15 @@ def triage(payload: TriageRequest) -> TriageResponse:
         extra={"request_id": request_id, "customer_id": payload.customer_id},
     )
 
-    thread_config = {"configurable": {"thread_id": request_id}}
     initial_state = {
         "customer_message": payload.message,
         "customer_id": payload.customer_id,
         "request_id": request_id,
         "trace_id": trace_id,
+    }
+    thread_config = {
+        "configurable": {"thread_id": request_id},
+        **build_run_config(initial_state, config),
     }
 
     start = time.perf_counter()
@@ -130,10 +134,13 @@ def approve(request_id: str, payload: ApprovalRequest) -> TriageResponse:
         raise HTTPException(
             status_code=404, detail=f"No paused triage awaiting approval for '{request_id}'"
         )
+    resume_config = {**thread_config, **build_run_config(snapshot.values, config)}
 
     try:
         with traced_step("langgraph.resume", request_id=request_id):
-            result = graph.invoke(Command(resume={"approved": payload.approved}), config=thread_config)
+            result = graph.invoke(
+                Command(resume={"approved": payload.approved}), config=resume_config
+            )
     except Exception:
         logger.exception("triage_resume_failed", extra={"request_id": request_id})
         raise HTTPException(status_code=500, detail="Failed to resume triage investigation") from None

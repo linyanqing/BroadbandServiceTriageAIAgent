@@ -35,7 +35,7 @@ class AgentConfig(BaseSettings):
 
     langsmith_enabled: bool = Field(default=False, validation_alias="LANGCHAIN_TRACING_V2")
     langsmith_project: str = Field(
-        default="tpg-broadband-triage", validation_alias="LANGCHAIN_PROJECT"
+        default="broadband-triage-agent", validation_alias="LANGCHAIN_PROJECT"
     )
 
     otel_enabled: bool = Field(default=False)
