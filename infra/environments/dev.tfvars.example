@@ -1,0 +1,20 @@
+# Copy to dev.tfvars (kept out of git -- see .gitignore) and fill in your
+# account's actual values. Never commit a real .tfvars file.
+
+project_name = "broadband-triage-agent"
+environment  = "dev"
+aws_region   = "ap-southeast-2"
+
+vpc_id              = "vpc-xxxxxxxx"
+public_subnet_ids   = ["subnet-aaaaaaa", "subnet-bbbbbbb"]
+private_subnet_ids  = ["subnet-ccccccc", "subnet-ddddddd"]
+
+container_image  = "123456789012.dkr.ecr.ap-southeast-2.amazonaws.com/broadband-triage-agent:latest"
+bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+auto_approve_high_risk   = false
+langsmith_tracing_enabled = false
+langsmith_project        = "tpg-broadband-triage"
+
+cribl_otlp_endpoint = "https://cribl.example.internal:10080"
+alarm_sns_topic_arn = ""

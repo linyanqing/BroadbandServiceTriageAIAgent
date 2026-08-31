@@ -1,0 +1,28 @@
+# Local development stack: the agent + a local OpenTelemetry Collector
+# standing in for the ADOT Collector, so OTEL_ENABLED=true can be exercised
+# without any real Cribl/Datadog/Splunk endpoint. See docs/observability.md.
+
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MOCK_MODE: "true"
+      AUTO_APPROVE_HIGH_RISK: "false"
+      OTEL_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      LANGCHAIN_TRACING_V2: "false"
+      ENVIRONMENT: "local-docker"
+    depends_on:
+      - otel-collector
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4318:4318" # OTLP HTTP

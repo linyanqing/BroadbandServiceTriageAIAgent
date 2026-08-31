@@ -1,0 +1,40 @@
+# Local stand-in for the enterprise ADOT Collector. In this POC it just logs
+# what it receives so OTEL_ENABLED=true is demonstrable without a real Cribl
+# endpoint. A real deployment replaces the `logging` exporter below with a
+# single OTLP exporter pointed at Cribl, which then fans out to Datadog and
+# Splunk -- the application itself never changes. See docs/observability.md
+# and infra/modules/ecs_fargate for the ADOT sidecar used in AWS.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+exporters:
+  logging:
+    verbosity: detailed
+
+  # Example: routing to Cribl instead of (or as well as) local logging.
+  # otlphttp/cribl:
+  #   endpoint: ${env:CRIBL_OTLP_ENDPOINT}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]

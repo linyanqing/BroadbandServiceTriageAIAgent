@@ -1,0 +1,44 @@
+[project]
+name = "agent"
+version = "0.1.0"
+description = "TPG Broadband Service Triage AI Agent (LangGraph + Bedrock POC)"
+authors = [
+    { name = "Yanqing Lin", email = "linyanqing@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=0.2.60",
+    "langchain-core>=0.3.28",
+    "langchain-aws>=0.2.10",
+    "boto3>=1.35.0",
+    "langsmith>=0.2.10",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "opentelemetry-api>=1.28.0",
+    "opentelemetry-sdk>=1.28.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.28.0",
+    "opentelemetry-instrumentation-fastapi>=0.49b0",
+    "python-json-logger>=2.0.7",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+    "ruff>=0.7.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.16,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
