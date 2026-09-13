@@ -30,5 +30,8 @@ crash.log
 .idea/
 .vscode/
 
+# Personal Claude Code tooling (e.g. installed skills) -- not part of the app
+.claude/
+
 # OS
 .DS_Store

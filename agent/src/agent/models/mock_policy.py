@@ -1,12 +1,16 @@
-"""Deterministic stand-in for the Bedrock decision policy.
+"""Deterministic stand-in for the network-diagnose specialist agent.
 
 Used whenever MOCK_MODE=true (the default), so the agent runs and its tests
 pass without AWS credentials or Bedrock model access. This is NOT a fixed
 call sequence: every branch below reads only what is already in
-state["tool_results"] and reacts to it, exactly like the real
-BedrockDecisionPolicy is expected to given the same observations -- it is a
-rule-based simulation of the same ReAct policy described in
-prompts/system_prompt.py, not a scripted diagnostic path.
+state["tool_results"] and reacts to it, exactly like a live Bedrock-backed
+specialist is expected to given the same observations -- it is a rule-based
+simulation of the same ReAct policy described in prompts/system_prompt.py,
+not a scripted diagnostic path.
+
+get_customer/get_broadband_service are no longer this policy's concern --
+context_gathering (models/mock_specialists.py's CoreContextPolicy) already
+ran them and set state["service_id"] before any specialist is dispatched.
 """
 
 from __future__ import annotations
@@ -16,7 +20,7 @@ from ..tools.registry import ToolRegistry
 from .policy import latest_error, successful_results_by_tool
 
 
-class MockDecisionPolicy:
+class MockNetworkDiagnosePolicy:
     def __init__(self, registry: ToolRegistry) -> None:
         self._registry = registry
 
@@ -33,24 +37,7 @@ class MockDecisionPolicy:
             return {"type": "escalate", "resolution": "escalated_error", "message": error}
 
         results = successful_results_by_tool(state)
-
-        if "get_customer" not in results:
-            return {
-                "type": "tool",
-                "tool": "get_customer",
-                "tool_input": {"customer_id": state["customer_id"]},
-                "reasoning": "Need the customer profile before investigating the service.",
-            }
-
-        if "get_broadband_service" not in results:
-            return {
-                "type": "tool",
-                "tool": "get_broadband_service",
-                "tool_input": {"customer_id": state["customer_id"]},
-                "reasoning": "Need to identify the broadband service to diagnose.",
-            }
-
-        service_id = results["get_broadband_service"]["output"]["service_id"]
+        service_id = state.get("service_id")
 
         if "check_outage" not in results:
             return {

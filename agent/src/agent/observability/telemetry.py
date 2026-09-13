@@ -53,9 +53,7 @@ def setup_telemetry(config: AgentConfig) -> None:
 
     tracer_provider = TracerProvider(resource=resource)
     tracer_provider.add_span_processor(
-        BatchSpanProcessor(
-            OTLPSpanExporter(endpoint=f"{config.otel_exporter_endpoint}/v1/traces")
-        )
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=f"{config.otel_exporter_endpoint}/v1/traces"))
     )
     trace.set_tracer_provider(tracer_provider)
 

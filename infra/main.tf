@@ -1,3 +1,9 @@
+module "ecr" {
+  source = "./modules/ecr"
+
+  project_name = var.project_name
+}
+
 module "secrets" {
   source = "./modules/secrets"
 
@@ -43,10 +49,12 @@ module "ecs_fargate" {
   task_cpu                     = var.task_cpu
   task_memory                  = var.task_memory
   desired_count                = var.desired_count
+  assign_public_ip             = var.assign_public_ip
   bedrock_model_id             = var.bedrock_model_id
   auto_approve_high_risk       = var.auto_approve_high_risk
   langsmith_tracing_enabled    = var.langsmith_tracing_enabled
   langsmith_project            = var.langsmith_project
+  langsmith_endpoint           = var.langsmith_endpoint
   langchain_api_key_secret_arn = module.secrets.langchain_api_key_secret_arn
   cribl_otlp_endpoint          = var.cribl_otlp_endpoint
   log_retention_days           = var.log_retention_days

@@ -58,6 +58,12 @@ variable "desired_count" {
   type = number
 }
 
+variable "assign_public_ip" {
+  description = "Assign a public IP to tasks -- required when private_subnet_ids has no NAT gateway (e.g. a default VPC's public subnets)."
+  type        = bool
+  default     = false
+}
+
 variable "bedrock_model_id" {
   type = string
 }
@@ -72,6 +78,12 @@ variable "langsmith_tracing_enabled" {
 
 variable "langsmith_project" {
   type = string
+}
+
+variable "langsmith_endpoint" {
+  description = "Regional LangSmith API host (e.g. https://apac.api.smith.langchain.com). Leave empty for the SDK's default (US) host -- only accounts on a non-default regional deployment need this."
+  type        = string
+  default     = ""
 }
 
 variable "langchain_api_key_secret_arn" {

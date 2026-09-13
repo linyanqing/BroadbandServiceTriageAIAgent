@@ -1,12 +1,13 @@
 """Bedrock-backed decision policy.
 
-Used whenever MOCK_MODE=false. The model is only ever offered the tool specs
-built from the registry plus a `finish` control action -- it cannot see or
-name anything else. `_action_from_tool_call` (the parsing logic) is pure and
-unit-tested independently of any live Bedrock call; the environment this POC
-was built in has no AWS credentials, so `BedrockDecisionPolicy.decide` itself
-has not been exercised against a live model (see docs/architecture.md,
-Known Limitations).
+Used whenever MOCK_MODE=false. This one class is reused, unmodified, for
+every specialist (network_diagnose, billing, line_testing, equipment_reset)
+-- what scopes each instance is simply which `registry` and `resolutions`
+it's constructed with. The model is only ever offered that registry's tool
+specs plus a `finish` control action limited to that specialist's own valid
+resolutions -- it cannot see or name anything else. `_action_from_tool_call`
+(the parsing logic) is pure and unit-tested independently of any live
+Bedrock call.
 """
 
 from __future__ import annotations
@@ -24,32 +25,36 @@ from ..state import AgentState, CurrentAction
 from ..tools.registry import ToolRegistry
 from .policy import latest_error
 
-_FINISH_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "finish",
-        "description": (
-            "Call this once you have enough evidence to conclude the investigation. "
-            "resolution and diagnostic_summary must be grounded only in tool observations."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "resolution": {
-                    "type": "string",
-                    "enum": [
-                        "known_outage",
-                        "fault_ticket_created",
-                        "healthy_no_action",
-                        "escalated_error",
-                    ],
+# network_diagnose's resolutions -- the default for any BedrockDecisionPolicy
+# that doesn't pass its own `resolutions` (keeps existing behavior/tests
+# unchanged for that specialist).
+_DEFAULT_RESOLUTIONS = [
+    "known_outage",
+    "fault_ticket_created",
+    "healthy_no_action",
+    "escalated_error",
+]
+
+
+def build_finish_tool(resolutions: list[str]) -> dict:
+    return {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": (
+                "Call this once you have enough evidence to conclude the investigation. "
+                "resolution and diagnostic_summary must be grounded only in tool observations."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resolution": {"type": "string", "enum": resolutions},
+                    "diagnostic_summary": {"type": "string"},
                 },
-                "diagnostic_summary": {"type": "string"},
+                "required": ["resolution", "diagnostic_summary"],
             },
-            "required": ["resolution", "diagnostic_summary"],
         },
-    },
-}
+    }
 
 
 def _tool_dict(spec) -> dict:
@@ -65,17 +70,24 @@ def _tool_dict(spec) -> dict:
     }
 
 
-def build_tool_specs_for_llm(registry: ToolRegistry) -> list[dict]:
-    return [_tool_dict(spec) for spec in registry.all()] + [_FINISH_TOOL]
+def build_tool_specs_for_llm(
+    registry: ToolRegistry, resolutions: list[str] | None = None
+) -> list[dict]:
+    return [_tool_dict(spec) for spec in registry.all()] + [
+        build_finish_tool(resolutions or _DEFAULT_RESOLUTIONS)
+    ]
 
 
-def build_decision_messages(state: AgentState) -> list:
+def build_decision_messages(state: AgentState, system_prompt: str) -> list:
     """Redacted, structured summary of state -- never the raw customer_message
     verbatim beyond what perception already classified, keeping PII exposure
     to the model itself minimal and auditable."""
 
     error = latest_error(state)
     context = {
+        # Not PII -- an internal correlation identifier the model needs to
+        # call get_customer/get_broadband_service. See security/redaction.py.
+        "customer_id": state.get("customer_id"),
         "issue_type": state.get("issue_type"),
         "confidence": state.get("confidence"),
         "service_id": state.get("service_id"),
@@ -84,7 +96,7 @@ def build_decision_messages(state: AgentState) -> list:
         "approval_rejected": state.get("approval_rejected", False),
     }
     return [
-        SystemMessage(content=SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=json.dumps(context, default=str)),
     ]
 
@@ -122,9 +134,16 @@ def parse_decision(response: AIMessage, registry: ToolRegistry) -> CurrentAction
 
 
 class BedrockDecisionPolicy:
-    def __init__(self, registry: ToolRegistry, config: AgentConfig) -> None:
+    def __init__(
+        self,
+        registry: ToolRegistry,
+        config: AgentConfig,
+        resolutions: list[str] | None = None,
+        system_prompt: str | None = None,
+    ) -> None:
         self._registry = registry
-        tool_specs = build_tool_specs_for_llm(registry)
+        self._system_prompt = system_prompt or SYSTEM_PROMPT
+        tool_specs = build_tool_specs_for_llm(registry, resolutions)
         self.llm = ChatBedrockConverse(
             model=config.bedrock_model_id,
             region_name=config.aws_region,
@@ -137,6 +156,6 @@ class BedrockDecisionPolicy:
                 "resolution": "escalated_error",
                 "message": "The high-risk action was not approved by a human reviewer.",
             }
-        messages = build_decision_messages(state)
+        messages = build_decision_messages(state, self._system_prompt)
         response = self.llm.invoke(messages)
         return parse_decision(response, self._registry)

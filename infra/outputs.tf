@@ -3,6 +3,11 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
+output "ecr_repository_url" {
+  description = "Push the agent image here before the first full apply (see docs/deployment.md)"
+  value       = module.ecr.repository_url
+}
+
 output "ecs_cluster_name" {
   value = module.ecs_fargate.cluster_name
 }

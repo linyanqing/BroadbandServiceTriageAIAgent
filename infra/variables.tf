@@ -62,6 +62,18 @@ variable "desired_count" {
   default = 1
 }
 
+variable "assign_public_ip" {
+  description = <<-EOT
+    Assign a public IP to ECS tasks. Set true when private_subnet_ids are
+    actually public subnets with no NAT gateway route to the internet (e.g.
+    deploying into a default VPC for a low-cost POC) -- without a public IP
+    or a NAT gateway, tasks cannot reach ECR/Bedrock/CloudWatch and will
+    never start. Leave false for a real private-subnet-with-NAT topology.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "bedrock_model_id" {
   description = "Bedrock model ID with tool/function-calling support. Never hard-coded in application code -- set explicitly per environment."
   type        = string
@@ -80,6 +92,12 @@ variable "langsmith_tracing_enabled" {
 variable "langsmith_project" {
   type    = string
   default = "broadband-triage-agent"
+}
+
+variable "langsmith_endpoint" {
+  description = "Regional LangSmith API host (e.g. https://apac.api.smith.langchain.com). Leave empty for the SDK's default (US) host -- only accounts on a non-default regional deployment need this (a key is only valid against the region it was issued in)."
+  type        = string
+  default     = ""
 }
 
 variable "cribl_otlp_endpoint" {
