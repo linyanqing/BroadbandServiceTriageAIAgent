@@ -135,6 +135,33 @@ default-VPC (`assign_public_ip`) workaround. Summary:
    /ecs/broadband-triage-agent-dev --region <region> --since 5m` has the
    real exception (the API only ever returns a generic 500 to callers).
 
+## CI/CD (GitHub Actions)
+
+- **`.github/workflows/ci.yml`** -- runs `ruff check`/`ruff format --check`/
+  `pytest` (`MOCK_MODE=true`, no AWS needed) on every PR and on pushes to
+  any branch other than `main`.
+- **`.github/workflows/deploy.yml`** -- on every push to `main` (i.e. every
+  merged PR), re-runs the same test job against the actual merge commit,
+  then -- only if that passes -- builds the image, pushes it to ECR
+  (tagged `latest` and the commit SHA), force-redeploys the ECS service,
+  and waits for it to stabilize. This is exactly the manual `docker build`
+  / `docker push` / `aws ecs update-service --force-new-deployment`
+  sequence in step 3/4 above, automated.
+- **Authentication**: GitHub Actions assumes an IAM role via OIDC
+  (`infra/modules/github_oidc`) -- no long-lived AWS access keys are
+  stored as GitHub secrets. The role's trust policy accepts only this
+  exact repo on pushes to `main` (never a PR branch, never a fork), and
+  its permissions are scoped to push access on only this one ECR
+  repository and update access on only this one ECS service -- nothing
+  broader in the account. Provisioned the same way as the rest of
+  `infra/`: `terraform apply -target=module.github_oidc`.
+- **Does not run Terraform.** This repo's Terraform state is local-only
+  (`infra/terraform.tfstate`, gitignored) -- a CI runner has no access to
+  it, and re-running `terraform apply` from scratch there would try to
+  recreate everything. Infra changes stay a manual, local
+  `terraform apply` step; the pipeline only ever builds/pushes/redeploys
+  the application image onto infra that already exists.
+
 ### API Gateway alternative
 
 The spec allows API Gateway as the external entry point. This POC's

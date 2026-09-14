@@ -70,3 +70,15 @@ module "cloudwatch" {
   ecs_service_name    = module.ecs_fargate.service_name
   alarm_sns_topic_arn = var.alarm_sns_topic_arn
 }
+
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  project_name         = var.project_name
+  environment          = var.environment
+  github_repo          = var.github_repo
+  create_oidc_provider = var.github_oidc_provider_exists ? false : true
+  ecr_repository_arn   = module.ecr.repository_arn
+  ecs_service_arn      = module.ecs_fargate.service_arn
+  ecs_cluster_arn      = module.ecs_fargate.cluster_arn
+}

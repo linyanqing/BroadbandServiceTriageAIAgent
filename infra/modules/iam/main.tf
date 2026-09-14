@@ -57,7 +57,7 @@ locals {
 }
 
 data "aws_bedrock_inference_profile" "selected" {
-  count                 = local.bedrock_is_inference_profile ? 1 : 0
+  count                = local.bedrock_is_inference_profile ? 1 : 0
   inference_profile_id = var.bedrock_model_id
 }
 

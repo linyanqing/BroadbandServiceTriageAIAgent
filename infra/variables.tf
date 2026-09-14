@@ -16,6 +16,18 @@ variable "aws_region" {
   default     = "ap-southeast-2"
 }
 
+variable "github_repo" {
+  description = "GitHub repo the CD role trusts, as \"owner/name\" (see infra/modules/github_oidc)."
+  type        = string
+  default     = "linyanqing/BroadbandServiceTriageAIAgent"
+}
+
+variable "github_oidc_provider_exists" {
+  description = "Set true if this AWS account already has a GitHub OIDC provider registered (from another repo's CI/CD) -- AWS allows only one per issuer URL, so a second `terraform apply` would fail trying to create a duplicate."
+  type        = bool
+  default     = false
+}
+
 variable "vpc_id" {
   description = "VPC to deploy the ALB and ECS service into."
   type        = string

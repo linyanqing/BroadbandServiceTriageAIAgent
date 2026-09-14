@@ -19,3 +19,8 @@ output "ecs_service_name" {
 output "log_group_name" {
   value = module.ecs_fargate.log_group_name
 }
+
+output "github_actions_deploy_role_arn" {
+  description = "Paste into .github/workflows/deploy.yml's role-to-assume"
+  value       = module.github_oidc.deploy_role_arn
+}
