@@ -379,15 +379,18 @@ docker/   Dockerfile + local docker-compose (agent + OTel Collector demo)
 
 - [docs/architecture.md](docs/architecture.md) -- context/logical/deployment
   diagrams, state graph, sequence diagram
-- [docs/agent-design.md](docs/agent-design.md) -- state, decision policies,
-  the ReAct loop, human-approval routing, the four demonstrated diagnostic
-  paths
+- [docs/agent-design.md](docs/agent-design.md) -- the multi-agent supervisor
+  pattern, state, decision policies, human-approval routing, the seven
+  demonstrated diagnostic paths
 - [docs/observability.md](docs/observability.md) -- LangSmith vs
   OpenTelemetry vs CloudWatch, and why they're kept separate
 - [docs/security.md](docs/security.md) -- tool authorization, prompt
   injection resistance, PII redaction, secrets
 - [docs/deployment.md](docs/deployment.md) -- local dev, tests, AWS deploy,
-  known limitations
+  CI/CD, known limitations
+- [docs/developer-workflow.md](docs/developer-workflow.md) -- start-to-finish
+  walkthrough: an IDE change -> local test -> PR/CI -> merge/CD -> live on
+  ECS -> observing it (CloudWatch/LangSmith)
 
 ## Environment variables
 
