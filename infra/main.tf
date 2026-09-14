@@ -1,3 +1,9 @@
+module "ecr" {
+  source = "./modules/ecr"
+
+  project_name = var.project_name
+}
+
 module "secrets" {
   source = "./modules/secrets"
 
@@ -43,10 +49,12 @@ module "ecs_fargate" {
   task_cpu                     = var.task_cpu
   task_memory                  = var.task_memory
   desired_count                = var.desired_count
+  assign_public_ip             = var.assign_public_ip
   bedrock_model_id             = var.bedrock_model_id
   auto_approve_high_risk       = var.auto_approve_high_risk
   langsmith_tracing_enabled    = var.langsmith_tracing_enabled
   langsmith_project            = var.langsmith_project
+  langsmith_endpoint           = var.langsmith_endpoint
   langchain_api_key_secret_arn = module.secrets.langchain_api_key_secret_arn
   cribl_otlp_endpoint          = var.cribl_otlp_endpoint
   log_retention_days           = var.log_retention_days
@@ -61,4 +69,16 @@ module "cloudwatch" {
   ecs_cluster_name    = module.ecs_fargate.cluster_name
   ecs_service_name    = module.ecs_fargate.service_name
   alarm_sns_topic_arn = var.alarm_sns_topic_arn
+}
+
+module "github_oidc" {
+  source = "./modules/github_oidc"
+
+  project_name         = var.project_name
+  environment          = var.environment
+  github_repo          = var.github_repo
+  create_oidc_provider = var.github_oidc_provider_exists ? false : true
+  ecr_repository_arn   = module.ecr.repository_arn
+  ecs_service_arn      = module.ecs_fargate.service_arn
+  ecs_cluster_arn      = module.ecs_fargate.cluster_arn
 }

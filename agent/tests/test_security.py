@@ -50,7 +50,12 @@ def test_parse_decision_accepts_registered_tool():
 def test_parse_decision_maps_finish_to_complete():
     registry = build_default_registry()
     message = _FakeToolCallMessage(
-        [{"name": "finish", "args": {"resolution": "healthy_no_action", "diagnostic_summary": "ok"}}]
+        [
+            {
+                "name": "finish",
+                "args": {"resolution": "healthy_no_action", "diagnostic_summary": "ok"},
+            }
+        ]
     )
     action = parse_decision(message, registry)
     assert action["type"] == "complete"

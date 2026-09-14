@@ -26,9 +26,12 @@ curl -X POST localhost:8000/api/v1/triage/<request_id>/approve \
 ```
 
 Try `customer_id: "456"` (known outage, resolves immediately, no approval
-needed) and `"789"` (healthy diagnostics, guidance instead of a ticket) to
-see the other diagnostic paths. Set `AUTO_APPROVE_HIGH_RISK=true` to skip
-the approval pause for a faster end-to-end demo of the fault-ticket path.
+needed) and `"789"` (healthy diagnostics, guidance instead of a ticket) for
+the other network-diagnostics paths, or `"111"`/`"222"`/`"333"` to dispatch
+the billing/line-testing/equipment-reset specialists instead -- see
+[agent-design.md](agent-design.md#the-demonstrated-diagnostic-paths) for
+the full table. Set `AUTO_APPROVE_HIGH_RISK=true` to skip every approval
+pause for a faster end-to-end demo.
 
 ### With the local OTel Collector pipeline
 
@@ -45,8 +48,10 @@ OTLP pipeline without a real Cribl/Datadog/Splunk endpoint.
 
 ```bash
 cd agent
-uv run pytest -q      # 45 tests: graph dynamism, tool authorization,
-                       # scenarios A-D, security, redaction, OTel/LangSmith
+uv run pytest -q      # 80 tests: multi-agent graph dynamism (supervisor
+                       # dispatch + each specialist's ReAct loop), per-
+                       # specialist tool scoping, the seven diagnostic
+                       # paths, security, redaction, OTel/LangSmith
                        # toggles, health endpoints
 uv run ruff check .
 ```
@@ -59,16 +64,27 @@ Internet -> ALB -> ECS Fargate service
                      └── adot-collector sidecar -> Cribl -> Datadog/Splunk
 ```
 
-1. **Build and push the image**:
+Validated end-to-end against a live account (`ap-southeast-2`, default VPC,
+no NAT gateway) -- see [README.md#deploying-to-aws-ecs-fargate](../README.md#deploying-to-aws-ecs-fargate)
+for the exact, tested command sequence including the ECR bootstrap and the
+default-VPC (`assign_public_ip`) workaround. Summary:
+
+0. **Bootstrap the ECR repo first** (`terraform apply -target=module.ecr`)
+   -- the ECS service needs an image at the referenced tag to exist before
+   the rest of the stack can come up.
+
+1. **Build and push the image** (for `linux/amd64`, Fargate's default
+   platform):
 
    ```bash
    aws ecr get-login-password --region <region> | \
      docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
-   docker build -f docker/Dockerfile -t <account>.dkr.ecr.<region>.amazonaws.com/broadband-triage-agent:latest .
+   docker buildx build --platform linux/amd64 -f docker/Dockerfile \
+     -t <account>.dkr.ecr.<region>.amazonaws.com/broadband-triage-agent:latest --load .
    docker push <account>.dkr.ecr.<region>.amazonaws.com/broadband-triage-agent:latest
    ```
 
-2. **Provision infrastructure**:
+2. **Provision the rest of the infrastructure**:
 
    ```bash
    cd infra
@@ -78,22 +94,73 @@ Internet -> ALB -> ECS Fargate service
    terraform apply -var-file=environments/dev.tfvars
    ```
 
-   `infra/` provisions: an ECS cluster, task definition (agent + ADOT
-   collector sidecar), Fargate service, ALB + target group + listener, the
-   task execution/task IAM roles (least-privilege, see
-   [security.md](security.md)), a Secrets Manager placeholder for the
-   LangSmith API key, a CloudWatch log group, and two CloudWatch alarms
-   (ALB 5xx, ECS CPU).
+   `infra/` provisions: an ECR repository, an ECS cluster, task definition
+   (agent + ADOT collector sidecar), Fargate service, ALB + target group +
+   listener, the task execution/task IAM roles (least-privilege, see
+   [security.md](security.md) -- the task role's Bedrock statement is
+   derived via the `aws_bedrock_inference_profile` data source so it covers
+   both the profile ARN and its underlying per-region model ARNs), a
+   Secrets Manager placeholder for the LangSmith API key, a CloudWatch log
+   group, and two CloudWatch alarms (ALB 5xx, ECS CPU).
 
-3. **Populate the LangSmith secret** (Terraform only creates the name):
+   If this is the account's first-ever ECS deployment, the apply can fail
+   once with `AccessDenied ... AssumeRole ... AWSServiceRoleForECS` (a
+   service-linked role ECS normally self-creates but occasionally races
+   with) -- `aws iam create-service-linked-role --aws-service-name
+   ecs.amazonaws.com` (harmless if it already exists) and re-apply.
+
+3. **Populate the LangSmith secret** (Terraform only creates the name, never
+   a value -- the ECS task fails to start with `ResourceInitializationError`
+   until this has *some* version, even an empty string):
 
    ```bash
    aws secretsmanager put-secret-value \
      --secret-id broadband-triage-agent/dev/langchain-api-key \
-     --secret-string '<your LangSmith API key>'
+     --secret-string '<your LangSmith API key, or "" if leaving tracing off>' \
+     --region <region>
    ```
 
-4. **Verify**: `curl http://$(terraform output -raw alb_dns_name)/health`
+   **If tracing then returns `403 Forbidden` on every request**: your
+   LangSmith account may be on a non-default regional deployment (e.g.
+   APAC) -- a key only authenticates against the region it was issued in.
+   Confirm with `curl -H "x-api-key: $KEY"
+   https://apac.api.smith.langchain.com/api/v1/sessions?limit=1` (swap the
+   subdomain), then set `langsmith_endpoint` in `dev.tfvars` to that host
+   and re-apply. See
+   [architecture.md#known-limitations](architecture.md#known-limitations)
+   for how this was root-caused.
+
+4. **Verify**: `curl http://$(terraform output -raw alb_dns_name)/health` --
+   and if the task doesn't reach `RUNNING`, `aws logs tail
+   /ecs/broadband-triage-agent-dev --region <region> --since 5m` has the
+   real exception (the API only ever returns a generic 500 to callers).
+
+## CI/CD (GitHub Actions)
+
+- **`.github/workflows/ci.yml`** -- runs `ruff check`/`ruff format --check`/
+  `pytest` (`MOCK_MODE=true`, no AWS needed) on every PR and on pushes to
+  any branch other than `main`.
+- **`.github/workflows/deploy.yml`** -- on every push to `main` (i.e. every
+  merged PR), re-runs the same test job against the actual merge commit,
+  then -- only if that passes -- builds the image, pushes it to ECR
+  (tagged `latest` and the commit SHA), force-redeploys the ECS service,
+  and waits for it to stabilize. This is exactly the manual `docker build`
+  / `docker push` / `aws ecs update-service --force-new-deployment`
+  sequence in step 3/4 above, automated.
+- **Authentication**: GitHub Actions assumes an IAM role via OIDC
+  (`infra/modules/github_oidc`) -- no long-lived AWS access keys are
+  stored as GitHub secrets. The role's trust policy accepts only this
+  exact repo on pushes to `main` (never a PR branch, never a fork), and
+  its permissions are scoped to push access on only this one ECR
+  repository and update access on only this one ECS service -- nothing
+  broader in the account. Provisioned the same way as the rest of
+  `infra/`: `terraform apply -target=module.github_oidc`.
+- **Does not run Terraform.** This repo's Terraform state is local-only
+  (`infra/terraform.tfstate`, gitignored) -- a CI runner has no access to
+  it, and re-running `terraform apply` from scratch there would try to
+  recreate everything. Infra changes stay a manual, local
+  `terraform apply` step; the pipeline only ever builds/pushes/redeploys
+  the application image onto infra that already exists.
 
 ### API Gateway alternative
 
@@ -113,8 +180,14 @@ here to avoid adding infrastructure the POC doesn't need.
   shared checkpointer (e.g. a Postgres- or DynamoDB-backed one) before the
   human-approval pause/resume flow is safe to run behind a load balancer
   with more than one task.
-- **Not applied**: `infra/` was validated with `terraform validate` and
-  `terraform fmt` in this environment (no AWS credentials/VPC were
-  available), not `terraform apply`'d against a real account.
-- **Bedrock/LangSmith/Cribl not exercised live**: see
+- **Default VPC / no NAT gateway**: the tested deployment reused the
+  account's default VPC's public subnets for `private_subnet_ids` with
+  `assign_public_ip = true`, since there was no NAT gateway available. A
+  real private-subnet-with-NAT topology (`assign_public_ip = false`, the
+  module's default) is untested here, though it's a standard pattern the
+  module supports.
+- **Cribl not exercised against a real endpoint**: no real Cribl instance
+  in a personal account; see
   [architecture.md#known-limitations](architecture.md#known-limitations).
+  (LangSmith tracing, by contrast, is now confirmed working end-to-end --
+  see the regional-endpoint note in step 3 above.)

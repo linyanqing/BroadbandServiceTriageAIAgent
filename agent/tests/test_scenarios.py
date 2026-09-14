@@ -69,3 +69,50 @@ def test_scenario_d_rejected_approval_escalates():
 def test_approve_unknown_request_id_returns_404():
     r = client.post("/api/v1/triage/REQ-DOES-NOT-EXIST/approve", json={"approved": True})
     assert r.status_code == 404
+
+
+def test_scenario_e_billing_specialist_requires_approval_then_applies_credit():
+    r = client.post(
+        "/api/v1/triage",
+        json={"customer_id": "111", "message": "I think I've been overcharged on my bill."},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "awaiting_approval"
+    assert body["approval"]["tool"] == "apply_billing_credit"
+
+    r2 = client.post(f"/api/v1/triage/{body['request_id']}/approve", json={"approved": True})
+    assert r2.status_code == 200
+    body2 = r2.json()
+    assert body2["status"] == "resolved"
+    assert body2["resolution"] == "billing_hold_resolved"
+
+
+def test_scenario_f_line_testing_specialist_requires_approval_then_schedules_visit():
+    r = client.post(
+        "/api/v1/triage",
+        json={"customer_id": "222", "message": "There's a lot of crackling static on the line."},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "awaiting_approval"
+    assert body["approval"]["tool"] == "schedule_technician_visit"
+
+    r2 = client.post(f"/api/v1/triage/{body['request_id']}/approve", json={"approved": True})
+    assert r2.status_code == 200
+    assert r2.json()["resolution"] == "line_test_fault_confirmed"
+
+
+def test_scenario_g_equipment_reset_specialist_requires_approval_then_resets():
+    r = client.post(
+        "/api/v1/triage",
+        json={"customer_id": "333", "message": "My router needs a reboot, it's offline."},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "awaiting_approval"
+    assert body["approval"]["tool"] == "trigger_equipment_reset"
+
+    r2 = client.post(f"/api/v1/triage/{body['request_id']}/approve", json={"approved": True})
+    assert r2.status_code == 200
+    assert r2.json()["resolution"] == "equipment_reset_completed"

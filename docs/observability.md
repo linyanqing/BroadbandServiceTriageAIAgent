@@ -36,7 +36,17 @@ system** -- see below for that.
 - **Traces**: `traced_step`/`traced_node` wrap every LangGraph node
   (`node.<name>` spans) and every tool call (`tool.<name>` spans, which
   are also the "enterprise API call" spans in this POC, since the tools
-  *are* the enterprise API integration point). `main.py` adds an
+  *are* the enterprise API integration point). Since the multi-agent
+  redesign, each specialist's internal nodes are prefixed with its own name
+  (`node.network_diagnose.agent_decision`, `node.billing.observation`, ...)
+  so five subgraphs' worth of spans stay distinguishable in one trace --
+  see `specialist_graph.py`. `context_gathering` (a plain node, not a
+  subgraph) is deliberately **not** `traced_node`-wrapped at its own
+  call site -- it internally calls already-spanned `tool_execution` work,
+  and empirically, wrapping it in an *additional* outer span caused its
+  real work to execute twice (see `agent-design.md`'s "Interrupt replay
+  and idempotency"); its two tool calls still each get their own
+  `tool.<name>` span from `tool_execution` itself. `main.py` adds an
   `langgraph.execution` span around the whole graph invocation, and
   `instrument_fastapi_app` adds standard HTTP spans via
   `FastAPIInstrumentor` when `OTEL_ENABLED=true`.

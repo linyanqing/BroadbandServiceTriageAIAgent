@@ -143,7 +143,9 @@ def approve(request_id: str, payload: ApprovalRequest) -> TriageResponse:
             )
     except Exception:
         logger.exception("triage_resume_failed", extra={"request_id": request_id})
-        raise HTTPException(status_code=500, detail="Failed to resume triage investigation") from None
+        raise HTTPException(
+            status_code=500, detail="Failed to resume triage investigation"
+        ) from None
 
     response = _extract_result(request_id, result)
     logger.info(

@@ -32,6 +32,17 @@ locals {
   adot_config = templatefile("${path.module}/templates/adot-config.yaml.tpl", {
     cribl_otlp_endpoint = var.cribl_otlp_endpoint
   })
+
+  # LangSmith is a multi-region SaaS -- a key issued under an org hosted on
+  # e.g. the APAC deployment authenticates ONLY against that region's API
+  # host (403 Forbidden everywhere else, including the default US host,
+  # discovered the hard way against a live deployment). Only add the
+  # override when set, so accounts on the default (US) deployment are
+  # unaffected -- LANGCHAIN_ENDPOINT="" would otherwise override the SDK's
+  # own default with an empty string and break tracing entirely.
+  langsmith_endpoint_env = var.langsmith_endpoint != "" ? [
+    { name = "LANGCHAIN_ENDPOINT", value = var.langsmith_endpoint },
+  ] : []
 }
 
 resource "aws_ecs_task_definition" "agent" {
@@ -51,7 +62,7 @@ resource "aws_ecs_task_definition" "agent" {
       portMappings = [
         { containerPort = var.container_port, protocol = "tcp" }
       ]
-      environment = [
+      environment = concat([
         { name = "ENVIRONMENT", value = var.environment },
         { name = "MOCK_MODE", value = "false" },
         { name = "AWS_REGION", value = var.aws_region },
@@ -61,7 +72,7 @@ resource "aws_ecs_task_definition" "agent" {
         { name = "OTEL_EXPORTER_OTLP_ENDPOINT", value = "http://localhost:4318" },
         { name = "LANGCHAIN_TRACING_V2", value = tostring(var.langsmith_tracing_enabled) },
         { name = "LANGCHAIN_PROJECT", value = var.langsmith_project },
-      ]
+      ], local.langsmith_endpoint_env)
       secrets = [
         { name = "LANGCHAIN_API_KEY", valueFrom = var.langchain_api_key_secret_arn },
       ]
@@ -101,8 +112,9 @@ resource "aws_ecs_service" "agent" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = var.private_subnet_ids
-    security_groups = [aws_security_group.tasks.id]
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.tasks.id]
+    assign_public_ip = var.assign_public_ip
   }
 
   load_balancer {

@@ -1,0 +1,99 @@
+name: Deploy
+
+# Only runs on a push to main (i.e. after a PR merges) -- tests the actual
+# merge commit, then builds, pushes, and redeploys only if that passes.
+# Never runs on a PR branch or a fork: deploy-permissions are granted via
+# OIDC (infra/modules/github_oidc) to a role whose trust policy only
+# accepts this exact repo's `main` branch, so a PR workflow run couldn't
+# assume it even if this trigger were broadened by mistake.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # manual re-run from the Actions tab if ever needed
+
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPOSITORY: broadband-triage-agent
+  ECS_CLUSTER: broadband-triage-agent-dev
+  ECS_SERVICE: broadband-triage-agent-dev
+  # Not a secret -- an IAM role ARN is an identifier, not a credential; the
+  # role can only ever be assumed by this exact repo's main branch (see
+  # infra/modules/github_oidc's trust policy).
+  DEPLOY_ROLE_ARN: arn:aws:iam::837607376606:role/broadband-triage-agent-dev-github-deploy
+
+permissions:
+  id-token: write # required to request the OIDC token that assumes DEPLOY_ROLE_ARN
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.16"
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest -q
+        env:
+          MOCK_MODE: "true"
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build -f docker/Dockerfile \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}" \
+            .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+
+      - name: Force a new ECS deployment
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --region "$AWS_REGION" > /dev/null
+
+      - name: Wait for the deployment to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION"

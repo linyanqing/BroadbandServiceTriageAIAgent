@@ -1,0 +1,41 @@
+name: CI
+
+# Runs on every PR (and any push to a branch other than main -- pushes to
+# main are covered by deploy.yml's own test job, which runs on the actual
+# merge commit right before deploying it). No AWS credentials are used or
+# needed here: tests run under MOCK_MODE=true.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.11.16"
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Format check (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Test
+        run: uv run pytest -q
+        env:
+          MOCK_MODE: "true"

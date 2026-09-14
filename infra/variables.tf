@@ -16,6 +16,18 @@ variable "aws_region" {
   default     = "ap-southeast-2"
 }
 
+variable "github_repo" {
+  description = "GitHub repo the CD role trusts, as \"owner/name\" (see infra/modules/github_oidc)."
+  type        = string
+  default     = "linyanqing/BroadbandServiceTriageAIAgent"
+}
+
+variable "github_oidc_provider_exists" {
+  description = "Set true if this AWS account already has a GitHub OIDC provider registered (from another repo's CI/CD) -- AWS allows only one per issuer URL, so a second `terraform apply` would fail trying to create a duplicate."
+  type        = bool
+  default     = false
+}
+
 variable "vpc_id" {
   description = "VPC to deploy the ALB and ECS service into."
   type        = string
@@ -62,6 +74,18 @@ variable "desired_count" {
   default = 1
 }
 
+variable "assign_public_ip" {
+  description = <<-EOT
+    Assign a public IP to ECS tasks. Set true when private_subnet_ids are
+    actually public subnets with no NAT gateway route to the internet (e.g.
+    deploying into a default VPC for a low-cost POC) -- without a public IP
+    or a NAT gateway, tasks cannot reach ECR/Bedrock/CloudWatch and will
+    never start. Leave false for a real private-subnet-with-NAT topology.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "bedrock_model_id" {
   description = "Bedrock model ID with tool/function-calling support. Never hard-coded in application code -- set explicitly per environment."
   type        = string
@@ -80,6 +104,12 @@ variable "langsmith_tracing_enabled" {
 variable "langsmith_project" {
   type    = string
   default = "broadband-triage-agent"
+}
+
+variable "langsmith_endpoint" {
+  description = "Regional LangSmith API host (e.g. https://apac.api.smith.langchain.com). Leave empty for the SDK's default (US) host -- only accounts on a non-default regional deployment need this (a key is only valid against the region it was issued in)."
+  type        = string
+  default     = ""
 }
 
 variable "cribl_otlp_endpoint" {

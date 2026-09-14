@@ -32,6 +32,19 @@ class AgentConfig(BaseSettings):
     auto_approve_high_risk: bool = Field(default=False)
 
     max_iterations: int = Field(default=8)
+    # Ceiling on how many times the supervisor may be invoked in one
+    # investigation -- the supervisor-level analogue of max_iterations.
+    # This counts every supervisor call, dispatch or finish alike: 4
+    # specialists exist and the router refuses to dispatch the same one
+    # twice, so the absolute worst case is dispatch, dispatch, dispatch,
+    # dispatch, then a final complete/escalate decision -- 5 calls -- plus
+    # one spare for a genuine edge case. (A confirmed LangGraph replay
+    # behavior can re-invoke this node -- see docs/agent-design.md's
+    # "Interrupt replay and idempotency" -- but state.py's dedup_add
+    # reducer keeps specialist_history/specialist_results byte-identical
+    # across that replay, so it no longer inflates this counter; no extra
+    # headroom needed for it.)
+    max_specialist_dispatches: int = Field(default=6)
 
     langsmith_enabled: bool = Field(default=False, validation_alias="LANGCHAIN_TRACING_V2")
     langsmith_project: str = Field(

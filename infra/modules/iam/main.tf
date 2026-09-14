@@ -45,13 +45,34 @@ resource "aws_iam_role" "task" {
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
 }
 
+# Cross-region inference profile IDs carry a geography prefix (us., eu.,
+# apac., au., global., ...) that a bare foundation-model ID never does.
+# Invoking a profile requires bedrock:InvokeModel on BOTH the profile ARN
+# and every underlying foundation-model ARN it can route to (which can span
+# multiple regions) -- granting only the foundation-model form here was a
+# real bug caught in first live deployment (AccessDeniedException on
+# bedrock:InvokeModel even though the model itself was invocable).
+locals {
+  bedrock_is_inference_profile = can(regex("^(us|eu|apac|au|global|jp|ca)\\.", var.bedrock_model_id))
+}
+
+data "aws_bedrock_inference_profile" "selected" {
+  count                = local.bedrock_is_inference_profile ? 1 : 0
+  inference_profile_id = var.bedrock_model_id
+}
+
+locals {
+  bedrock_resources = local.bedrock_is_inference_profile ? concat(
+    [data.aws_bedrock_inference_profile.selected[0].inference_profile_arn],
+    [for m in data.aws_bedrock_inference_profile.selected[0].models : m.model_arn],
+  ) : ["arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}"]
+}
+
 data "aws_iam_policy_document" "task_bedrock" {
   statement {
-    sid     = "InvokeConfiguredBedrockModel"
-    actions = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-    resources = [
-      "arn:aws:bedrock:${var.aws_region}::foundation-model/${var.bedrock_model_id}",
-    ]
+    sid       = "InvokeConfiguredBedrockModel"
+    actions   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+    resources = local.bedrock_resources
   }
 }
 

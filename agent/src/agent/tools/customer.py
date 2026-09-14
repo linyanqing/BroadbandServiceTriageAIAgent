@@ -23,7 +23,11 @@ def get_customer(payload: GetCustomerInput) -> dict:
     fixture = _CUSTOMER_FIXTURES.get(
         payload.customer_id, {"name": f"Customer {payload.customer_id}", "status": "active"}
     )
-    return {"customer_id": payload.customer_id, "name": fixture["name"], "status": fixture["status"]}
+    return {
+        "customer_id": payload.customer_id,
+        "name": fixture["name"],
+        "status": fixture["status"],
+    }
 
 
 def register_customer_tool(registry: ToolRegistry) -> None:
