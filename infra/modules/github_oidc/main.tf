@@ -52,11 +52,22 @@ data "aws_iam_policy_document" "trust" {
       values   = ["sts.amazonaws.com"]
     }
     condition {
-      test     = "StringEquals"
+      # StringLike (not StringEquals): GitHub's `sub` claim now appends an
+      # immutable numeric ID to both the owner and repo name segments --
+      # confirmed via CloudTrail on the first real deploy attempt, e.g.
+      # "repo:linyanqing@6722774/BroadbandServiceTriageAIAgent@1352340657:
+      # ref:refs/heads/main", not the plain "owner/repo" form docs/examples
+      # commonly show. The wildcards below only ever match that numeric
+      # suffix -- the literal "linyanqing@"/"BroadbandServiceTriageAIAgent@"
+      # prefixes still have to match exactly, so this is no looser a trust
+      # boundary than an exact match, just robust to the ID (which doesn't
+      # change for this repo, but isn't worth hardcoding as an opaque
+      # magic number in this file).
+      test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      # Only the exact repo, only pushes to `main` -- never a PR branch,
-      # never a fork. Merge-to-main is the only event deploy.yml runs on.
-      values = ["repo:${var.github_repo}:ref:refs/heads/${var.github_deploy_branch}"]
+      values = [
+        "repo:${split("/", var.github_repo)[0]}@*/${split("/", var.github_repo)[1]}@*:ref:refs/heads/${var.github_deploy_branch}"
+      ]
     }
   }
 }
